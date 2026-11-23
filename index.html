@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>找卡点</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f1f3f0; color: #1f2622; line-height: 1.6; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 20px 14px 40px; }
+  h1 { font-size: 26px; letter-spacing: 1px; }
+  .lead { color: #5d6660; font-size: 14px; margin: 4px 0 14px; }
+  .card { background: #fff; border-radius: 10px; padding: 14px; border: 1px solid #d9dfd9; margin-bottom: 14px; min-width: 0; }
+  .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 8px; overflow-wrap: anywhere; }
+  .top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+  label { font-size: 12px; color: #69736c; display: block; overflow-wrap: anywhere; }
+  input, textarea { font: inherit; font-size: 14px; padding: 6px 8px; border: 1px solid #b9c3bb; border-radius: 6px; width: 100%; min-width: 0; background: #fff; font-variant-numeric: tabular-nums; }
+  textarea { resize: vertical; min-height: 120px; line-height: 1.55; font-family: ui-monospace, Menlo, "PingFang SC", monospace; }
+  .row { margin-top: 10px; }
+  .bad { border-color: #b3412f !important; background: #fff0ec !important; }
+  button { font: inherit; font-size: 13px; padding: 6px 11px; border-radius: 6px; border: 1px solid #2f5d48; background: #2f5d48; color: #fff; cursor: pointer; }
+  button.ghost { background: #fff; color: #2f5d48; }
+  .presets, .dl { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .err { display: none; background: #fff0ec; border: 1px solid #ecb7aa; color: #8e2b1c; border-radius: 8px; padding: 10px 12px; margin-bottom: 14px; overflow-wrap: anywhere; }
+  .muted { color: #7b847e; font-size: 12px; }
+  code { font-family: ui-monospace, Menlo, monospace; background: #edf1ed; padding: 0 4px; border-radius: 3px; font-size: 12px; }
+  /* 诊断 */
+  .stamp { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; margin-bottom: 6px; }
+  .stamp.bad2 { background: #f6d5cc; color: #8e2b1c; } .stamp.ok { background: #d8eadf; color: #2f5d48; }
+  #summary { font-size: 18px; font-weight: 700; overflow-wrap: anywhere; }
+  #facts { margin: 8px 0 0 18px; font-size: 14px; } #facts li { margin: 3px 0; overflow-wrap: anywhere; }
+  /* 工位体检条 */
+  .st { display: grid; grid-template-columns: 92px minmax(0, 1fr) minmax(64px, max-content); gap: 8px; align-items: center; margin: 7px 0; font-variant-numeric: tabular-nums; }
+  .st .nm { font-size: 14px; overflow-wrap: anywhere; min-width: 0; } .st .nm small { display: block; color: #7b847e; font-size: 11px; }
+  .bar { position: relative; height: 22px; background: #eef1ee; border-radius: 4px; overflow: hidden; }
+  .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
+  .bar .cap { position: absolute; top: -2px; bottom: -2px; width: 2px; background: #1f2622; }
+  .st .v { text-align: right; font-weight: 700; font-size: 15px; }
+  .st.choke .nm { font-weight: 700; color: #8e2b1c; } .st.choke .v { color: #a33a26; }
+  .lg { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: #69736c; margin-top: 6px; }
+  .lg i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: -2px; margin-right: 4px; }
+  table.t { border-collapse: collapse; font-size: 13px; width: 100%; font-variant-numeric: tabular-nums; }
+  table.t th, table.t td { padding: 5px 6px; border-bottom: 1px solid #e5eae5; text-align: right; overflow-wrap: anywhere; }
+  table.t th:first-child, table.t td:first-child { text-align: left; }
+  table.t tr.sum td { font-weight: 700; border-top: 1px solid #b9c3bb; }
+  table.t td.cut { color: #a33a26; font-weight: 700; }
+  .tw { overflow-x: auto; }
+  .ways { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .way { border: 1px solid #d9dfd9; border-radius: 8px; padding: 8px 10px; min-width: 0; }
+  .way h3 { font-size: 13px; font-weight: 600; overflow-wrap: anywhere; } .way b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .way p { font-size: 12px; color: #69736c; overflow-wrap: anywhere; }
+  .way.best { border-color: #2f5d48; background: #f2f8f4; }
+  #sugs { display: grid; gap: 8px; }
+  .sug { display: flex; gap: 10px; align-items: center; justify-content: space-between; border: 1px solid #dfe5df; border-radius: 6px; padding: 8px 10px; }
+  .sug span { min-width: 0; overflow-wrap: anywhere; font-size: 14px; } .sug button { flex: none; }
+  .how { font-size: 13px; } .how p { margin: 6px 0; }
+  @media (max-width: 760px) { .top { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 480px) { .ways { grid-template-columns: minmax(0, 1fr); } .sug { flex-direction: column; align-items: stretch; } #summary { font-size: 16px; } .st { grid-template-columns: 70px minmax(0, 1fr) minmax(52px, max-content); } .st .v { font-size: 13px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>找卡点</h1>
+  <p class="lead">店里突然爆单、高峰做不过来，先别急着多招人多买设备：把几个工位（炸锅、烤箱、备料、打包……）和每道菜在各工位上占几分钟写下来，这里按每小时算一遍，告诉你<b>卡在哪个工位</b>、每小时最多出几份、先停哪道菜毛利最多，加一台之后下一个卡在哪。默认例子是虚构的。</p>
+
+  <div class="top">
+    <div class="card">
+      <h2>店里的工位</h2>
+      <label for="stations">每行一个：工位名 台数 [每台每小时能用几分钟，不写就是 60]</label>
+      <textarea id="stations" maxlength="400" spellcheck="false"></textarea>
+      <p class="muted" style="margin-top:4px">「台」可以是一口锅、一台烤箱，也可以是一个人。例：<code>收银 1 50</code> = 一个收银员，每小时有 10 分钟要干别的。</p>
+      <div class="row">
+        <label for="items">每行一道菜：菜名 每小时想卖几份 每份毛利(元) 工位:每份占几分钟 …</label>
+        <textarea id="items" maxlength="800" spellcheck="false"></textarea>
+        <p class="muted" style="margin-top:4px">例：<code>炸鸡 30 14 炸锅:3 打包:1</code> = 每小时想卖 30 份，每份赚 14 元，每份占炸锅 3 分钟、打包 1 分钟。一锅能同时炸几份，就用一锅的分钟除以份数。</p>
+      </div>
+      <div class="row" style="max-width:180px"><label for="hours">高峰几小时</label><input id="hours" inputmode="decimal" maxlength="4"></div>
+      <div class="presets" id="presets"></div>
+    </div>
+    <div>
+      <div class="err" id="error"></div>
+      <div class="card" id="out">
+        <span class="stamp" id="stamp"></span>
+        <div id="summary"></div>
+        <ul id="facts"></ul>
+      </div>
+    </div>
+  </div>
+
+  <div id="out2">
+    <div class="card">
+      <h2>各工位体检：每小时要用多少 ÷ 能用多少</h2>
+      <div id="bars"></div>
+      <div class="lg"><span><i style="background:#c8553d"></i>超过 100%，接不住</span><span><i style="background:#d9a441"></i>90% 以上，吃紧</span><span><i style="background:#7fae8f"></i>有空</span><span>黑线 = 100%</span></div>
+    </div>
+    <div class="card">
+      <h2 id="waysH">接不住时，三种办法每小时各出多少</h2>
+      <div class="ways" id="ways"></div>
+      <div class="tw" style="margin-top:10px"><table class="t" id="tbl"></table></div>
+    </div>
+    <div class="card" id="sugCard">
+      <h2>改一个条件（点一下代回重算）</h2>
+      <div id="sugs"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>带走结果</h2>
+    <div class="dl">
+      <button id="dlCSV">CSV 明细</button><button id="dlMD">Markdown 清单</button><button id="dlPNG">结果卡 PNG</button><button id="dlJSON" class="ghost">JSON 备份</button>
+      <button id="reset" class="ghost">恢复默认</button>
+    </div>
+    <p class="muted" style="margin-top:6px">输入自动保存在这台设备的浏览器里，刷新还在。</p>
+  </div>
+
+  <div class="card how">
+    <h2>怎么算的</h2>
+    <p><b>忙碌度</b>：一个工位每小时要用的分钟 = 每道菜想卖几份 × 每份在这儿占几分钟，加起来；能用的分钟 = 台数 × 每台每小时能用几分钟。两者相除，最高的那个就是卡点。</p>
+    <p><b>照比例接单</b>：顾客点的东西混在一起，卡点出不来，整单都得等，所以每道菜都按同一个比例少出：1 ÷ 卡点忙碌度。</p>
+    <p><b>挑着卖</b>：每道菜卖多少自己定（不超过想卖的），各工位都不超时，让每小时毛利最多。这是一个线性规划，用单纯形法精确求解；毛利一样时多卖份数。</p>
+    <p><b>全接住要几台</b>：每个工位要用的分钟 ÷ 每台能用的分钟，向上取整。</p>
+    <p class="muted">只算每小时平均要用多少分钟，不算顾客排队等多久、到店的忽多忽少、换班休息和提前备料；份数是平均数，可以有小数。毛利是你自己填的。默认例子是虚构的。</p>
+  </div>
+</div>
+
+  <script>
+/* 找卡点 · 计算核心
+ * 一家小店高峰时，几道菜要过几个工位（炸锅、烤箱、备料、打包……）。哪个工位最先忙不过来，整店就卡在那儿。
+ * 输入：工位（名字 台数 [每台每小时能用几分钟，默认 60]）；菜（名字 每小时想卖几份 每份毛利 工位:每份占几分钟 …）；高峰几小时。
+ * 每个工位：要用的分钟 = Σ 想卖份数 × 每份分钟；能用的分钟 = 台数 × 每台分钟；忙碌度 = 要用 ÷ 能用。
+ *   - 忙碌度最高的就是卡点；超过 100% 就接不住。
+ *   - 照比例接单：顾客点的东西混在一起，卡点出不来整单都等，所以每道菜都按 1 ÷ 最高忙碌度 打折。
+ *   - 挑着卖：每道菜卖多少可以自己定（不超过想卖的份数），让每小时毛利最多（线性规划，单纯形法 + Bland 规则；
+ *     毛利一样时多卖份数）。
+ *   - 全接住要几台：每个工位 ⌈要用 ÷ 每台分钟⌉。
+ *   - 下一个卡点：卡点加一台，再算一次谁最忙。
+ * 每份占几分钟 = 这道菜在这个工位上占一台设备/一个人的时间；一锅能同时炸几份就除以几份。
+ * 不做：排队等多久、到店的随机波动、换班与休息、备料提前做、价格与成本核算。默认例子是虚构的。 */
+(function (root) {
+  'use strict';
+  function Bad(message, field) { const e = new Error(message); e.field = field; return e; }
+  const KEYS = ['stations', 'items', 'hours'];
+  const NAME = /^(?![\d.]+$)[^\s:：，,；;、]{1,8}$/;
+  const NUM = /^\d{1,4}(\.\d)?$/;
+  const MAX_ST = 6, MAX_IT = 8;
+  const r1 = (v) => Math.round(v * 10 + 1e-9) / 10;
+  const f1 = (v) => { const x = r1(v); return Number.isInteger(x) ? String(x) : x.toFixed(1); };
+  const pct = (v) => Math.round(v * 100) + '%';
+  const tidy = (s) => String(s).replace(/[，,；;、\t]/g, ' ').replace(/：/g, ':').replace(/\s*:\s*/g, ':').replace(/\s+/g, ' ').trim();
+
+  /* ── 输入 ── */
+  function num(t, lo, hi, what, field) {
+    if (!NUM.test(t)) throw Bad(what + '「' + String(t).slice(0, 8) + '」要写数字（最多一位小数）', field);
+    const v = +t;
+    if (v < lo || v > hi) throw Bad(what + ' ' + t + ' 要在 ' + lo + ' 到 ' + hi + ' 之间', field);
+    return v;
+  }
+  /* 第一行是表头（第二项不是数字，比如「工位 台数」「菜 每小时想卖」）就跳过；菜名本身以「菜」开头不受影响 */
+  const isHead = (ln) => { const t = ln.split(' '); return t.length > 1 && !/^[\d.]+$/.test(t[1]) && /[台数想卖每小时分钟毛利]/.test(t[1]); };
+  function parse(inp) {
+    const hs = String(inp.hours == null ? '' : inp.hours).trim();
+    const hours = num(hs, 0.5, 12, '高峰几小时', 'hours');
+    const sl = String(inp.stations == null ? '' : inp.stations).split('\n').map(tidy).filter(Boolean);
+    if (sl.length && isHead(sl[0])) sl.shift();
+    if (!sl.length) throw Bad('工位一个都没写：每行写「工位名 台数」，比如「炸锅 2」', 'stations');
+    if (sl.length > MAX_ST) throw Bad('工位最多 ' + MAX_ST + ' 个（现在 ' + sl.length + ' 个）', 'stations');
+    const st = [];
+    sl.forEach((ln, i) => {
+      const t = ln.split(' '), row = i + 1, nm = t[0];
+      if (!NAME.test(nm)) throw Bad('工位第 ' + row + ' 行的名字「' + nm.slice(0, 10) + '」不行：1 到 8 个字，不能光是数字、不能带冒号', 'stations');
+      if (st.some((s) => s.name === nm)) throw Bad('有两个工位都叫「' + nm + '」', 'stations');
+      if (t.length < 2 || t.length > 3) throw Bad('工位第 ' + row + ' 行（' + nm + '）写「名字 台数」，可选第三项「每台每小时能用几分钟」', 'stations');
+      if (!/^\d{1,2}$/.test(t[1]) || +t[1] < 1 || +t[1] > 20) throw Bad('工位「' + nm + '」的台数要写 1 到 20 的整数（现在「' + t[1].slice(0, 6) + '」）', 'stations');
+      const avail = t.length > 2 ? num(t[2], 1, 60, '工位「' + nm + '」每台每小时能用的分钟', 'stations') : 60;
+      st.push({ name: nm, count: +t[1], avail });
+    });
+    const il = String(inp.items == null ? '' : inp.items).split('\n').map(tidy).filter(Boolean);
+    if (il.length && isHead(il[0])) il.shift();
+    if (!il.length) throw Bad('菜一道都没写：每行写「菜名 每小时想卖几份 每份毛利 工位:分钟」', 'items');
+    if (il.length > MAX_IT) throw Bad('菜最多 ' + MAX_IT + ' 道（现在 ' + il.length + ' 道）', 'items');
+    const it = [];
+    il.forEach((ln, i) => {
+      const t = ln.split(' '), row = i + 1, nm = t[0];
+      if (!NAME.test(nm)) throw Bad('菜第 ' + row + ' 行的名字「' + nm.slice(0, 10) + '」不行：1 到 8 个字，不能光是数字、不能带冒号', 'items');
+      if (it.some((x) => x.name === nm)) throw Bad('有两道菜都叫「' + nm + '」', 'items');
+      if (t.length < 4) throw Bad('菜「' + nm + '」要写「菜名 每小时想卖几份 每份毛利 工位:分钟」，至少过一个工位', 'items');
+      const demand = num(t[1], 0, 999, '「' + nm + '」每小时想卖的份数', 'items');
+      const profit = num(t[2], 0, 9999, '「' + nm + '」每份毛利', 'items');
+      const use = {};
+      t.slice(3).forEach((s) => {
+        const m = /^([^:]+):(.*)$/.exec(s);
+        if (!m) throw Bad('「' + nm + '」的「' + s.slice(0, 10) + '」要写成「工位:分钟」，比如「炸锅:3」', 'items');
+        const k = st.findIndex((x) => x.name === m[1]);
+        if (k < 0) throw Bad('「' + nm + '」用到的工位「' + m[1].slice(0, 8) + '」在上面工位里没有', 'items');
+        if (use[k] != null) throw Bad('「' + nm + '」把工位「' + m[1] + '」写了两次，合成一项', 'items');
+        const v = num(m[2], 0.1, 120, '「' + nm + '」在「' + m[1] + '」上每份的分钟', 'items');
+        use[k] = v;
+      });
+      it.push({ name: nm, demand, profit, use: st.map((_, k) => (use[k] == null ? 0 : use[k])) });
+    });
+    if (!it.some((x) => x.demand > 0)) throw Bad('每道菜每小时想卖的份数都是 0，至少一道要大于 0', 'items');
+    return { st, it, hours };
+  }
+
+  /* ── 单纯形：max c·x，A x ≤ b，x ≥ 0，b ≥ 0（原点可行，不需要第一阶段）。Bland 规则防循环。 ── */
+  function simplex(c, A, b) {
+    const m = A.length, n = c.length, W = n + m + 1, EPS = 1e-9;
+    const T = A.map((row, i) => { const r = new Array(W).fill(0); row.forEach((v, j) => { r[j] = v; }); r[n + i] = 1; r[W - 1] = b[i]; return r; });
+    const z = new Array(W).fill(0); c.forEach((v, j) => { z[j] = -v; });
+    const basis = A.map((_, i) => n + i);
+    for (let iter = 0; iter < 5000; iter++) {
+      let e = -1;
+      for (let j = 0; j < W - 1; j++) if (z[j] < -EPS) { e = j; break; }
+      if (e < 0) break;
+      let l = -1, best = Infinity;
+      for (let i = 0; i < m; i++) if (T[i][e] > EPS) {
+        const q = T[i][W - 1] / T[i][e];
+        if (q < best - EPS || (Math.abs(q - best) <= EPS && basis[i] < basis[l])) { best = q; l = i; }
+      }
+      if (l < 0) throw new Error('unbounded');
+      const pv = T[l][e];
+      for (let j = 0; j < W; j++) T[l][j] /= pv;
+      for (let i = 0; i < m; i++) if (i !== l && T[i][e] !== 0) { const f = T[i][e]; for (let j = 0; j < W; j++) T[i][j] -= f * T[l][j]; }
+      { const f = z[e]; for (let j = 0; j < W; j++) z[j] -= f * T[l][j]; }
+      basis[l] = e;
+    }
+    const x = new Array(n).fill(0);
+    basis.forEach((v, i) => { if (v < n) x[v] = Math.max(0, T[i][W - 1]); });
+    return x;
+  }
+  /* 挑着卖：每道菜 0 ≤ x ≤ 想卖份数，各工位分钟不超过能用的；毛利最多，毛利一样时份数最多 */
+  function bestMix(P) {
+    const n = P.it.length, cap = P.st.map((s) => s.count * s.avail);
+    const A = [], b = [];
+    P.st.forEach((s, k) => { A.push(P.it.map((x) => x.use[k])); b.push(cap[k]); });
+    P.it.forEach((x, i) => { const row = new Array(n).fill(0); row[i] = 1; A.push(row); b.push(x.demand); });
+    const pmax = Math.max(1, ...P.it.map((x) => x.profit));
+    const c = P.it.map((x) => x.profit + pmax * 1e-6);
+    const x = simplex(c, A, b).map((v, i) => Math.min(P.it[i].demand, v));
+    return x;
+  }
+
+  /* ── 主计算 ── */
+  function loads(P) {
+    return P.st.map((s, k) => {
+      const need = P.it.reduce((a, x) => a + x.demand * x.use[k], 0), cap = s.count * s.avail;
+      return { name: s.name, count: s.count, avail: s.avail, need, cap, rho: need / cap, used: P.it.some((x) => x.use[k] > 0), fullCount: Math.max(1, Math.ceil(need / s.avail - 1e-9)) };
+    });
+  }
+  function peakOf(L) { let b = 0; L.forEach((l, k) => { if (l.rho > L[b].rho + 1e-12) b = k; }); return b; }
+  function status(rho) { return rho > 1 + 1e-9 ? '卡住' : rho >= 0.9 - 1e-9 ? '吃紧' : rho > 0 ? '有空' : '没用上'; }
+  function calculate(inp) {
+    const P = parse(inp);
+    const L = loads(P), b = peakOf(L), rho = L[b].rho;
+    const f = rho > 1 ? 1 / rho : 1;
+    const want = P.it.reduce((a, x) => a + x.demand, 0);
+    const prop = P.it.map((x) => x.demand * f);
+    const propN = want * f;
+    const profitFull = P.it.reduce((a, x) => a + x.demand * x.profit, 0);
+    const profitProp = profitFull * f;
+    const mix = bestMix(P);
+    const mixN = mix.reduce((a, v) => a + v, 0);
+    const profitMix = mix.reduce((a, v, i) => a + v * P.it[i].profit, 0);
+    const mixLoad = P.st.map((s, k) => P.it.reduce((a, x, i) => a + mix[i] * x.use[k], 0) / (s.count * s.avail));
+    /* 卡点加一台 */
+    const P2 = { st: P.st.map((s, k) => (k === b ? Object.assign({}, s, { count: s.count + 1 }) : s)), it: P.it, hours: P.hours };
+    const L2 = loads(P2), b2 = peakOf(L2), rho2 = L2[b2].rho, f2 = rho2 > 1 ? 1 / rho2 : 1;
+    const over = L.map((l, k) => ({ k, l })).filter((o) => o.l.rho > 1 + 1e-9);
+    const lackPerHour = want - propN;
+    const S = L[b];
+    let summary;
+    if (rho > 1 + 1e-9) {
+      summary = '卡在' + S.name + '：照现在的点单，' + S.name + '要忙到 ' + pct(rho) + '（每小时要 ' + f1(S.need) + ' 分钟，' + S.count + ' 台只有 ' + f1(S.cap) + ' 分钟），每小时最多出 ' + f1(propN) + ' 份，想卖 ' + f1(want) + ' 份，' + f1(P.hours) + ' 小时高峰少出 ' + f1(lackPerHour * P.hours) + ' 份。';
+    } else {
+      summary = '接得住：最忙的是' + S.name + '，' + pct(rho) + '（每小时要 ' + f1(S.need) + ' 分钟，能用 ' + f1(S.cap) + ' 分钟）' + (rho >= 0.9 - 1e-9 ? '，已经吃紧，再多一点就会卡' : '') + '；每小时想卖的 ' + f1(want) + ' 份都做得出来。';
+    }
+    const facts = [];
+    facts.push('各工位忙碌度：' + L.map((l) => l.name + ' ' + (l.used ? pct(l.rho) : '没用上')).join('，') + '。');
+    if (rho > 1 + 1e-9) {
+      facts.push('照比例接单（点的东西混在一起，卡点出不来整单都等）：每道菜都只能出想卖的 ' + pct(f) + '，每小时毛利 ' + f1(profitProp) + ' 元（全接住是 ' + f1(profitFull) + ' 元）。');
+      const cut = P.it.map((x, i) => ({ x, v: mix[i] })).filter((o) => o.v < o.x.demand - 0.05);
+      facts.push('挑着卖（每道卖多少自己定，毛利最多）：' + (cut.length ? cut.map((o) => (o.v < 0.05 ? o.x.name + '高峰先停（想卖 ' + f1(o.x.demand) + ' 份）' : o.x.name + '每小时限 ' + f1(o.v) + ' 份（想卖 ' + f1(o.x.demand) + '）')).join('，') + '，其余照卖' : '每道都照卖') + '，每小时 ' + f1(mixN) + ' 份、毛利 ' + f1(profitMix) + ' 元，比照比例多 ' + f1(profitMix - profitProp) + ' 元。');
+      facts.push('想全接住至少要：' + over.map((o) => o.l.name + ' ' + o.l.count + ' → ' + o.l.fullCount + ' 台').join('，') + '。');
+    } else {
+      facts.push('每小时毛利 ' + f1(profitFull) + ' 元，' + f1(P.hours) + ' 小时高峰 ' + f1(profitFull * P.hours) + ' 元。');
+    }
+    facts.push(S.name + '加一台（' + S.count + ' → ' + (S.count + 1) + '）：' + (rho2 > 1 + 1e-9 ? '还是接不住，卡在' + L2[b2].name + ' ' + pct(rho2) + '，每小时出 ' + f1(want * f2) + ' 份' : '全接住，下一个最忙的是' + L2[b2].name + ' ' + pct(rho2) + (rho2 >= 0.9 - 1e-9 ? '，也快满了' : '')) + '。');
+    return { P, L, b, rho, f, want, prop, propN, profitFull, profitProp, mix, mixN, profitMix, mixLoad, L2, b2, rho2, f2, over, lackPerHour, summary, facts };
+  }
+
+  /* ── 建议：改输入，代回重算 ── */
+  function stText(st) { return st.map((s) => s.name + ' ' + s.count + (s.avail !== 60 ? ' ' + f1(s.avail) : '')).join('\n'); }
+  function itText(P, it) { return it.map((x) => [x.name, f1(x.demand), f1(x.profit)].concat(P.st.map((s, k) => (x.use[k] > 0 ? s.name + ':' + f1(x.use[k]) : null)).filter(Boolean)).join(' ')).join('\n'); }
+  function suggestions(inp, R) {
+    const out = [], P = R.P, S = R.L[R.b];
+    const withI = (o) => Object.assign({}, inp, o);
+    const push = (id, patch, lead) => {
+      if (out.length >= 4) return;
+      let r2; try { r2 = calculate(withI(patch)); } catch (e) { return; }
+      out.push({ id, text: lead + '：' + (r2.rho > 1 + 1e-9 ? '卡在' + r2.L[r2.b].name + ' ' + pct(r2.rho) + '，每小时出 ' + f1(r2.propN) + ' 份' : '全接住，最忙' + r2.L[r2.b].name + ' ' + pct(r2.rho)) + '，毛利每小时 ' + f1(r2.profitProp) + ' 元', apply: withI(patch), propN: r2.propN, profit: r2.profitProp, rho: r2.rho });
+    };
+    if (R.rho > 1 + 1e-9) {
+      push('more', { stations: stText(P.st.map((s, k) => (k === R.b ? Object.assign({}, s, { count: s.count + 1 }) : s))) }, S.name + '加一台（' + S.count + ' → ' + (S.count + 1) + '）');
+      const cut = P.it.map((x, i) => ({ i, x, v: Math.floor(R.mix[i] * 10 + 1e-6) / 10 })).filter((o) => o.v < o.x.demand - 0.05);
+      if (cut.length) {
+        const it2 = P.it.map((x, i) => { const c = cut.find((o) => o.i === i); return c ? Object.assign({}, x, { demand: c.v }) : x; });
+        push('limit', { items: itText(P, it2) }, '照挑着卖的配法限量（' + cut.map((o) => o.x.name + ' ' + f1(o.x.demand) + ' → ' + f1(o.v) + ' 份').join('、') + '）');
+      }
+      /* 卡点上占时间最多的那道菜，每份少 20% 分钟 */
+      let top = -1, tv = 0;
+      P.it.forEach((x, i) => { const v = x.demand * x.use[R.b]; if (v > tv + 1e-12) { tv = v; top = i; } });
+      if (top >= 0) {
+        const x = P.it[top], m0 = x.use[R.b], m1 = Math.max(0.1, r1(m0 * 0.8));
+        if (m1 < m0) {
+          const it2 = P.it.map((y, i) => (i === top ? Object.assign({}, y, { use: y.use.map((v, k) => (k === R.b ? m1 : v)) }) : y));
+          push('faster', { items: itText(P, it2) }, x.name + '在' + S.name + '上每份 ' + f1(m0) + ' → ' + f1(m1) + ' 分钟（比如一次多做几份、提前备半成品）');
+        }
+      }
+      if (S.avail < 60) push('avail', { stations: stText(P.st.map((s, k) => (k === R.b ? Object.assign({}, s, { avail: 60 }) : s))) }, S.name + '高峰不离人（每台每小时 ' + f1(S.avail) + ' → 60 分钟）');
+      return out;
+    }
+    /* 接得住：看能不能少一台、还能多卖多少 */
+    R.L.forEach((l, k) => {
+      if (l.count > 1 && l.need <= (l.count - 1) * l.avail + 1e-9) push('fewer' + k, { stations: stText(P.st.map((s, j) => (j === k ? Object.assign({}, s, { count: s.count - 1 }) : s))) }, l.name + '少一台（' + l.count + ' → ' + (l.count - 1) + '）');
+    });
+    if (R.rho > 0) {
+      const g = Math.floor((1 / R.rho) * 100 + 1e-9) / 100;
+      if (g > 1.0001) {
+        const it2 = P.it.map((x) => Object.assign({}, x, { demand: Math.floor(x.demand * g * 10 + 1e-6) / 10 }));
+        push('grow', { items: itText(P, it2) }, '每道菜都多卖到 ' + Math.round(g * 100) + '%（最忙的' + S.name + '正好满）');
+      }
+    }
+    return out;
+  }
+
+  /* ── 导出 ── */
+  function csvCell(v) { const s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+  function toCSV(R, stamp) {
+    const P = R.P, L = [['找卡点', '生成于 ' + stamp], ['结论', R.summary], ['高峰小时', P.hours], []];
+    L.push(['工位', '台数', '每台每小时分钟', '每小时要用分钟', '每小时能用分钟', '忙碌度', '状态', '全接住要几台']);
+    R.L.forEach((l) => L.push([l.name, l.count, f1(l.avail), f1(l.need), f1(l.cap), pct(l.rho), status(l.rho), l.fullCount]));
+    L.push([], ['菜', '每小时想卖', '每份毛利', '照比例能出', '挑着卖'].concat(P.st.map((s) => s.name + '每份分钟')));
+    P.it.forEach((x, i) => L.push([x.name, f1(x.demand), f1(x.profit), f1(R.prop[i]), f1(R.mix[i])].concat(x.use.map((v) => (v ? f1(v) : '')))));
+    L.push(['合计', f1(R.want), '', f1(R.propN), f1(R.mixN)], ['每小时毛利', f1(R.profitFull), '', f1(R.profitProp), f1(R.profitMix)]);
+    L.push([], ['序号', '说明']); R.facts.forEach((x, i) => L.push([i + 1, x]));
+    return L.map((r) => r.map(csvCell).join(',')).join('\n') + '\n';
+  }
+  function toMD(R, stamp, sg) {
+    const P = R.P, o = [];
+    o.push('# 找卡点', '', '生成时间：' + stamp + '　默认例子是虚构的', '', '**' + R.summary + '**', '');
+    R.facts.forEach((x) => o.push('- ' + x));
+    o.push('', '## 各工位', '', '| 工位 | 台数 | 要用/能用（分钟/小时） | 忙碌度 | 状态 | 全接住要几台 |', '|---|---|---|---|---|---|');
+    R.L.forEach((l) => o.push('| ' + l.name + ' | ' + l.count + ' | ' + f1(l.need) + ' / ' + f1(l.cap) + ' | ' + pct(l.rho) + ' | ' + status(l.rho) + ' | ' + l.fullCount + ' |'));
+    o.push('', '## 每道菜每小时', '', '| 菜 | 想卖 | 照比例能出 | 挑着卖 | 每份毛利 |', '|---|---|---|---|---|');
+    P.it.forEach((x, i) => o.push('| ' + x.name + ' | ' + f1(x.demand) + ' | ' + f1(R.prop[i]) + ' | ' + f1(R.mix[i]) + ' | ' + f1(x.profit) + ' |'));
+    o.push('| 合计 | ' + f1(R.want) + ' | ' + f1(R.propN) + ' | ' + f1(R.mixN) + ' | 毛利 ' + f1(R.profitFull) + ' / ' + f1(R.profitProp) + ' / ' + f1(R.profitMix) + ' 元 |');
+    if (sg && sg.length) { o.push('', '## 改一个条件'); sg.forEach((s) => o.push('- ' + s.text)); }
+    o.push('', '## 前提', '', '- 只算每小时平均要用多少分钟，不算排队等多久和到店的随机波动；份数是每小时平均，可以有小数。', '- 「每份占几分钟」是占一台设备或一个人的时间，一锅能同时做几份就除以几份。');
+    return o.join('\n') + '\n';
+  }
+
+  const DEFAULT = {
+    stations: '工位 台数 每台每小时能用几分钟\n炸锅 2\n烤箱 1\n备料 1\n打包 1',
+    items: '菜 每小时想卖 每份毛利 工位:每份分钟\n炸鸡 30 14 炸锅:3 打包:1\n薯条 25 6 炸锅:2 打包:0.5\n披萨 12 25 烤箱:4 备料:3 打包:1\n沙拉 10 9 备料:2 打包:0.5',
+    hours: '3',
+  };
+  const PRESETS = [
+    ['默认：炸鸡披萨店晚高峰', DEFAULT],
+    ['视频带火，炸鸡多来一半', Object.assign({}, DEFAULT, { items: DEFAULT.items.replace('炸鸡 30 14', '炸鸡 45 14') })],
+    ['平时下午', Object.assign({}, DEFAULT, { items: '菜 每小时想卖 每份毛利 工位:每份分钟\n炸鸡 12 14 炸锅:3 打包:1\n薯条 10 6 炸锅:2 打包:0.5\n披萨 5 25 烤箱:4 备料:3 打包:1\n沙拉 4 9 备料:2 打包:0.5' })],
+    ['奶茶店：封口机一台', { stations: '工位 台数 每台每小时能用几分钟\n煮茶 2\n调饮 2\n封口 1\n收银 1 50', items: '菜 每小时想卖 每份毛利 工位:每份分钟\n奶茶 60 8 煮茶:0.5 调饮:1.5 封口:0.6 收银:0.4\n果茶 30 11 调饮:2.5 封口:0.6 收银:0.4\n咖啡 15 12 调饮:2 封口:0.6 收银:0.4', hours: '2' }],
+  ];
+
+  const api = { DEFAULT, PRESETS, KEYS, parse, simplex, bestMix, loads, peakOf, status, calculate, suggestions, stText, itText, toCSV, toMD, f1, pct, r1 };
+  if (typeof module === 'object' && module.exports) module.exports = api; else root.AppCore = api;
+})(typeof window !== 'undefined' ? window : globalThis);
+
+  </script>
+  <script>
+/* 找卡点 · 界面层 */
+(function () {
+  'use strict';
+  const C = window.AppCore;
+  const KEY = 'find-the-choke:v1';
+  const NAME = '找卡点';
+  const copy = (o) => JSON.parse(JSON.stringify(o));
+  const DEFAULT = C.DEFAULT, PRESETS = C.PRESETS, KEYS = C.KEYS, f1 = C.f1, pct = C.pct;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const color = (rho) => (rho > 1 + 1e-9 ? '#c8553d' : rho >= 0.9 - 1e-9 ? '#d9a441' : '#7fae8f');
+  let state = copy(DEFAULT);
+  let last = null;
+
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* 隐私模式忽略 */ } }
+  function load() {
+    try {
+      const o = JSON.parse(localStorage.getItem(KEY) || 'null');
+      if (!o || typeof o !== 'object' || Array.isArray(o)) return null;
+      const s = {};
+      for (const k of KEYS) { if (o[k] == null || typeof o[k] === 'object') return null; s[k] = String(o[k]).slice(0, 800); }
+      return s;
+    } catch (e) { return null; }
+  }
+  function fill() { KEYS.forEach((k) => { $(k).value = state[k]; }); }
+
+  function renderBars(R) {
+    const top = Math.max(1.2, ...R.L.map((l) => l.rho));
+    $('bars').innerHTML = R.L.map((l, k) => {
+      const w = Math.min(100, (l.rho / top) * 100), cap = (1 / top) * 100;
+      return '<div class="st' + (k === R.b && R.rho > 1 + 1e-9 ? ' choke' : '') + '" data-st="' + k + '"><div class="nm">' + esc(l.name) + '<small>' + l.count + ' 台 · ' + C.status(l.rho) + '</small></div>' +
+        '<div class="bar" title="每小时要 ' + f1(l.need) + ' 分钟 / 能用 ' + f1(l.cap) + ' 分钟"><i style="width:' + w.toFixed(1) + '%;background:' + color(l.rho) + '"></i><span class="cap" style="left:' + cap.toFixed(1) + '%"></span></div>' +
+        '<div class="v">' + (l.used ? pct(l.rho) : '—') + '</div></div>';
+    }).join('');
+  }
+  function renderWays(R) {
+    const over = R.rho > 1 + 1e-9, P = R.P;
+    const W = over ? [
+      ['照现在的点单全接住', f1(R.want) + ' 份', '要' + R.over.map((o) => o.l.name + ' ' + o.l.fullCount + ' 台').join('、') + '，毛利 ' + f1(R.profitFull) + ' 元/小时', false],
+      ['照比例接单', f1(R.propN) + ' 份', '每道都只出 ' + pct(R.f) + '，毛利 ' + f1(R.profitProp) + ' 元/小时', false],
+      ['挑着卖', f1(R.mixN) + ' 份', '毛利 ' + f1(R.profitMix) + ' 元/小时，多 ' + f1(R.profitMix - R.profitProp) + ' 元', true],
+    ] : [
+      ['照现在的点单', f1(R.want) + ' 份', '每道都做得出来，毛利 ' + f1(R.profitFull) + ' 元/小时', true],
+      ['最忙的工位', pct(R.rho), R.L[R.b].name + '，每小时还空 ' + f1(R.L[R.b].cap - R.L[R.b].need) + ' 分钟', false],
+      ['高峰 ' + f1(P.hours) + ' 小时合计', f1(R.want * P.hours) + ' 份', '毛利 ' + f1(R.profitFull * P.hours) + ' 元', false],
+    ];
+    $('waysH').textContent = over ? '接不住时，三种办法每小时各出多少' : '接得住：每小时与整个高峰';
+    $('ways').innerHTML = W.map((w) => '<div class="way' + (w[3] ? ' best' : '') + '"><h3>' + esc(w[0]) + '</h3><b>' + esc(w[1]) + '</b><p>' + esc(w[2]) + '</p></div>').join('');
+    $('tbl').innerHTML = '<tr><th>菜</th><th>想卖</th>' + (over ? '<th>照比例</th><th>挑着卖</th>' : '') + '<th>每份毛利</th><th>卡点上每份分钟</th></tr>' +
+      P.it.map((x, i) => '<tr><td>' + esc(x.name) + '</td><td>' + f1(x.demand) + '</td>' + (over ? '<td>' + f1(R.prop[i]) + '</td><td' + (R.mix[i] < x.demand - 0.05 ? ' class="cut"' : '') + '>' + f1(R.mix[i]) + '</td>' : '') + '<td>' + f1(x.profit) + '</td><td>' + (x.use[R.b] ? f1(x.use[R.b]) : '—') + '</td></tr>').join('') +
+      '<tr class="sum"><td>每小时合计</td><td>' + f1(R.want) + '</td>' + (over ? '<td>' + f1(R.propN) + '</td><td>' + f1(R.mixN) + '</td>' : '') + '<td colspan="2">毛利 ' + (over ? f1(R.profitProp) + ' / ' + f1(R.profitMix) : f1(R.profitFull)) + ' 元</td></tr>';
+  }
+  function sugList(sg) {
+    const box = $('sugs'); box.innerHTML = '';
+    sg.forEach((x) => {
+      const d = document.createElement('div'); d.className = 'sug';
+      d.innerHTML = '<span>' + esc(x.text) + '</span>';
+      const bt = document.createElement('button'); bt.textContent = '照这样算'; bt.dataset.sug = x.id;
+      bt.addEventListener('click', () => { state = copy(x.apply); fill(); run(); });
+      d.appendChild(bt); box.appendChild(d);
+    });
+    $('sugCard').style.display = sg.length ? '' : 'none';
+  }
+  function run() {
+    [].forEach.call(document.querySelectorAll('.bad'), (e) => e.classList.remove('bad'));
+    try {
+      const R = C.calculate(state);
+      const sg = C.suggestions(state, R);
+      $('error').style.display = 'none'; $('out').style.display = ''; $('out2').style.display = '';
+      const over = R.rho > 1 + 1e-9;
+      $('stamp').className = 'stamp ' + (over ? 'bad2' : 'ok'); $('stamp').textContent = over ? '诊断：接不住' : '诊断：接得住';
+      $('summary').textContent = R.summary;
+      $('facts').innerHTML = R.facts.map((f) => '<li>' + esc(f) + '</li>').join('');
+      last = { r: R, sg };
+      renderBars(R); renderWays(R); sugList(sg);
+    } catch (e) {
+      last = null;
+      if (e.field) { const el = $(e.field); if (el) el.classList.add('bad'); }
+      $('error').textContent = '算不了：' + e.message; $('error').style.display = 'block';
+      $('out').style.display = 'none'; $('out2').style.display = 'none';
+    }
+    save();
+  }
+
+  /* ── 导出 ── */
+  function stamp() { const d = new Date(), z = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + z(d.getMonth() + 1) + '-' + z(d.getDate()) + ' ' + z(d.getHours()) + ':' + z(d.getMinutes()); }
+  function download(name, blob) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000); }
+  function wrap(g, t, w) {
+    const NOHEAD = '，。、；：！？）」』%·→｜';
+    const out = []; let line = [];
+    const toks = String(t).match(/[0-9][0-9,.%–]*(\s?(份|元|台|分钟|小时))?|[A-Za-z_][A-Za-z0-9_.\-/]*|[\s\S]/g) || [];
+    const width = (a) => g.measureText(a.join('')).width;
+    for (const tk of toks) {
+      if (line.length && width(line.concat([tk])) > w) {
+        let carry = [tk];
+        while (line.length > 1 && (NOHEAD.indexOf(carry[0][0]) >= 0 || '（「『'.indexOf(line[line.length - 1]) >= 0)) carry.unshift(line.pop());
+        out.push(line.join(''));
+        line = carry; if (/^\s+$/.test(line[0])) line.shift();
+      } else line.push(tk);
+    }
+    if (line.length) out.push(line.join('')); return out;
+  }
+  function fitText(g, t, w) { let s = String(t); if (g.measureText(s).width <= w) return s; while (s.length > 1 && g.measureText(s + '…').width > w) s = s.slice(0, -1); return s + '…'; }
+  function drawPNG(Lx) {
+    const R = Lx.r, P = R.P, over = R.rho > 1 + 1e-9;
+    const Wd = 1080, H = 1350, X = 70, TW = 940;
+    const cv = document.createElement('canvas'); cv.width = Wd; cv.height = H;
+    const g = cv.getContext('2d'), FF = '"PingFang SC","Microsoft YaHei",sans-serif';
+    g.fillStyle = '#f1f3f0'; g.fillRect(0, 0, Wd, H);
+    g.fillStyle = '#ffffff'; g.fillRect(36, 36, Wd - 72, H - 72);
+    g.fillStyle = '#69736c'; g.font = '24px ' + FF;
+    g.fillText(fitText(g, NAME + ' · ' + P.st.length + ' 个工位 · ' + P.it.length + ' 道菜 · 高峰 ' + f1(P.hours) + ' 小时', TW - 200), X, 98);
+    g.fillStyle = over ? '#f6d5cc' : '#d8eadf'; g.fillRect(X + TW - 180, 70, 180, 40);
+    g.fillStyle = over ? '#8e2b1c' : '#2f5d48'; g.font = 'bold 22px ' + FF; g.textAlign = 'center'; g.fillText(over ? '诊断：接不住' : '诊断：接得住', X + TW - 90, 98); g.textAlign = 'left';
+    g.fillStyle = '#1f2622'; g.font = 'bold 32px ' + FF;
+    let y = 160;
+    wrap(g, R.summary, TW).slice(0, 4).forEach((l) => { g.fillText(l, X, y); y += 46; });
+    y += 14;
+    /* 体检条 */
+    const top = Math.max(1.2, ...R.L.map((l) => l.rho)), bx0 = X + 170, bw = TW - 170 - 190;
+    R.L.forEach((l, k) => {
+      const choke = k === R.b && over;
+      g.fillStyle = choke ? '#8e2b1c' : '#1f2622'; g.font = (choke ? 'bold ' : '') + '24px ' + FF; g.fillText(fitText(g, l.name, 110), X, y + 26);
+      g.fillStyle = '#7b847e'; g.font = '17px ' + FF; g.fillText(l.count + ' 台 · ' + C.status(l.rho), X, y + 50);
+      g.fillStyle = '#eef1ee'; g.fillRect(bx0, y + 8, bw, 34);
+      g.fillStyle = color(l.rho); g.fillRect(bx0, y + 8, Math.min(1, l.rho / top) * bw, 34);
+      g.fillStyle = '#1f2622'; g.fillRect(bx0 + bw / top - 1, y + 2, 3, 46);
+      g.font = 'bold 26px ' + FF; g.fillStyle = choke ? '#a33a26' : '#1f2622'; g.textAlign = 'right'; { const vt = l.used ? pct(l.rho) : '—'; if (g.measureText(vt).width > 170) g.font = 'bold 20px ' + FF; g.fillText(fitText(g, vt, 175), X + TW, y + 36); } g.textAlign = 'left';
+      y += 66;
+    });
+    y += 20;
+    /* 三种办法 */
+    const ways = over ? [['全接住', f1(R.want) + ' 份', '毛利 ' + f1(R.profitFull) + ' 元'], ['照比例接单', f1(R.propN) + ' 份', '毛利 ' + f1(R.profitProp) + ' 元'], ['挑着卖', f1(R.mixN) + ' 份', '毛利 ' + f1(R.profitMix) + ' 元']]
+      : [['照现在的点单', f1(R.want) + ' 份', '毛利 ' + f1(R.profitFull) + ' 元'], ['最忙的工位', pct(R.rho), R.L[R.b].name], ['高峰合计', f1(R.want * P.hours) + ' 份', '毛利 ' + f1(R.profitFull * P.hours) + ' 元']];
+    g.fillStyle = '#69736c'; g.font = '20px ' + FF; g.fillText(fitText(g, over ? '每小时出多少（全接住要' + R.over.map((o) => o.l.name + ' ' + o.l.fullCount + ' 台').join('、') + '）' : '每小时都接得住', TW), X, y + 10); y += 24;
+    const cw = (TW - 20) / 3;
+    ways.forEach((w, i) => {
+      const bx = X + i * (cw + 10), best = (over && i === 2) || (!over && i === 0);
+      g.fillStyle = best ? '#f2f8f4' : '#f6f7f5'; g.fillRect(bx, y, cw, 118);
+      if (best) { g.strokeStyle = '#2f5d48'; g.lineWidth = 2; g.strokeRect(bx, y, cw, 118); }
+      g.fillStyle = '#69736c'; g.font = '20px ' + FF; g.fillText(fitText(g, w[0], cw - 30), bx + 16, y + 32);
+      g.fillStyle = '#1f2622'; g.font = 'bold 34px ' + FF; g.fillText(fitText(g, w[1], cw - 30), bx + 16, y + 74);
+      g.fillStyle = '#69736c'; g.font = '19px ' + FF; g.fillText(fitText(g, w[2], cw - 30), bx + 16, y + 104);
+    });
+    y += 160;
+    g.font = '21px ' + FF; g.fillStyle = '#1f2622';
+    const items = (over ? [R.facts[2], R.facts[3]] : [R.facts[0], R.facts[1]]).concat(Lx.sg.map((q) => '改一个条件：' + q.text));
+    for (const f of items) {
+      const ls = wrap(g, '· ' + f, TW);
+      if (y + (ls.length - 1) * 30 > H - 130) break;
+      ls.forEach((l) => { g.fillText(l, X, y); y += 30; }); y += 6;
+    }
+    g.fillStyle = '#7b847e'; g.font = '18px ' + FF;
+    wrap(g, '按每小时平均要用的分钟算，不算排队等多久与到店的随机波动；每份分钟和毛利是自己填的。默认例子是虚构的。', TW).forEach((l, i) => g.fillText(l, X, H - 96 + i * 27));
+    return Promise.resolve(cv);
+  }
+  function backup() {
+    const R = last.r;
+    return { app: NAME, version: 1, savedAt: stamp(), input: copy(state), result: { summary: R.summary, choke: R.L[R.b].name, busiest: +R.rho.toFixed(4), perHour: { want: R.want, proportional: +R.propN.toFixed(2), bestMix: +R.mixN.toFixed(2) }, profitPerHour: { full: R.profitFull, proportional: +R.profitProp.toFixed(2), bestMix: +R.profitMix.toFixed(2) },
+      stations: R.L.map((l) => ({ name: l.name, count: l.count, needMin: +l.need.toFixed(2), capMin: l.cap, load: +l.rho.toFixed(4), fullCount: l.fullCount })),
+      items: R.P.it.map((x, i) => ({ name: x.name, want: x.demand, proportional: +R.prop[i].toFixed(2), bestMix: +R.mix[i].toFixed(2) })) } };
+  }
+  function init() {
+    KEYS.forEach((k) => $(k).addEventListener('input', () => { state[k] = $(k).value; run(); }));
+    PRESETS.forEach((p) => {
+      const b = document.createElement('button'); b.className = 'ghost'; b.textContent = p[0];
+      b.addEventListener('click', () => { state = copy(p[1]); fill(); run(); });
+      $('presets').appendChild(b);
+    });
+    $('reset').addEventListener('click', () => { state = copy(DEFAULT); fill(); run(); });
+    $('dlCSV').addEventListener('click', () => { if (last) download(NAME + '.csv', new Blob(['\ufeff' + C.toCSV(last.r, stamp())], { type: 'text/csv;charset=utf-8' })); });
+    $('dlMD').addEventListener('click', () => { if (last) download(NAME + '.md', new Blob([C.toMD(last.r, stamp(), last.sg)], { type: 'text/markdown;charset=utf-8' })); });
+    $('dlJSON').addEventListener('click', () => { if (last) download(NAME + '-备份.json', new Blob([JSON.stringify(backup(), null, 2)], { type: 'application/json' })); });
+    $('dlPNG').addEventListener('click', () => { if (last) drawPNG(last).then((cv) => cv.toBlob((b) => download(NAME + '-1080x1350.png', b), 'image/png')); });
+    state = load() || copy(DEFAULT);
+    fill(); run();
+    window.__ex = { last: () => last, state: () => state, presets: PRESETS, DEFAULT, drawPNG };
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+
+  </script>
+</body>
+</html>
